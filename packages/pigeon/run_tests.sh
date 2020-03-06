@@ -19,6 +19,7 @@ test_pigeon_ios() {
     -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
     -F $framework_path \
     -Werror \
+    -fobjc-arc \
     -c $temp_dir/pigeon.m \
     -o $temp_dir/pigeon.o
 
@@ -52,6 +53,23 @@ test_pigeon_android ./pigeons/host2flutter.dart
 test_pigeon_android ./pigeons/message.dart
 test_pigeon_ios ./pigeons/message.dart
 test_pigeon_ios ./pigeons/host2flutter.dart
+
+pub run pigeon \
+  --input pigeons/message.dart \
+  --dart_out /dev/null \
+  --objc_header_out platform_tests/ios_unit_tests/ios/Runner/messages.h \
+  --objc_source_out platform_tests/ios_unit_tests/ios/Runner/messages.m
+clang-format -i platform_tests/ios_unit_tests/ios/Runner/messages.h
+clang-format -i platform_tests/ios_unit_tests/ios/Runner/messages.m
+pushd $PWD
+cd platform_tests/ios_unit_tests/ios/
+ xcodebuild \
+    -workspace Runner.xcworkspace \
+    -scheme RunnerTests \
+    -sdk iphonesimulator \
+    -destination 'platform=iOS Simulator,name=iPhone 8' \
+    test | xcpretty
+popd
 
 # e2e tests are not checked in until some issues can be worked out with e2e.
 if [ -e "e2e_tests" ]; then

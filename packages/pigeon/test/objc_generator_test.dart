@@ -52,7 +52,7 @@ void main() {
     expect(code, contains('@interface Input'));
     expect(code, contains('@interface Output'));
     expect(code, contains('@protocol Api'));
-    expect(code, matches('Output.*doSomething.*Input'));
+    expect(code, matches('Output.*doSomething.*Input.*FlutterError'));
     expect(code, contains('ApiSetup('));
   });
 
@@ -154,7 +154,7 @@ void main() {
     final String code = sink.toString();
     expect(
         code, contains('result.nested = [Input fromMap:dict[@\"nested\"]];'));
-    expect(code, contains('[self.nested toMap], @\"nested\"'));
+    expect(code, matches('[self.nested toMap].*@\"nested\"'));
   });
 
   test('prefix class header', () {
