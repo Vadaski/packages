@@ -1,8 +1,12 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+
+import 'fade_scale_transition.dart';
 
 /// Signature for a function that creates a widget that builds a
 /// transition.
@@ -26,7 +30,8 @@ typedef _ModalTransitionBuilder = Widget Function(
 /// The `configuration` argument is used to determine characteristics of the
 /// modal route that will be displayed, such as the enter and exit
 /// transitions, the duration of the transitions, and modal barrier
-/// properties.
+/// properties. By default, `configuration` is
+/// [FadeScaleTransitionConfiguration].
 ///
 /// The `useRootNavigator` argument is used to determine whether to push the
 /// modal to the [Navigator] furthest from or nearest to the given `context`.
@@ -43,15 +48,15 @@ typedef _ModalTransitionBuilder = Widget Function(
 ///
 /// * [ModalConfiguration], which is the configuration object used to define
 /// the modal's characteristics.
-Future<T> showModal<T>({
-  @required BuildContext context,
-  @required ModalConfiguration configuration,
+Future<T?> showModal<T>({
+  required BuildContext context,
+  ModalConfiguration configuration = const FadeScaleTransitionConfiguration(),
   bool useRootNavigator = true,
-  WidgetBuilder builder,
+  required WidgetBuilder builder,
+  RouteSettings? routeSettings,
+  ui.ImageFilter? filter,
 }) {
-  assert(configuration != null);
-  assert(useRootNavigator != null);
-  String barrierLabel = configuration.barrierLabel;
+  String? barrierLabel = configuration.barrierLabel;
   // Avoid looking up [MaterialLocalizations.of(context).modalBarrierDismissLabel]
   // if there is no dismissible barrier.
   if (configuration.barrierDismissible && configuration.barrierLabel == null) {
@@ -67,6 +72,8 @@ Future<T> showModal<T>({
       transitionDuration: configuration.transitionDuration,
       reverseTransitionDuration: configuration.reverseTransitionDuration,
       builder: builder,
+      routeSettings: routeSettings,
+      filter: filter,
     ),
   );
 }
@@ -86,30 +93,29 @@ class _ModalRoute<T> extends PopupRoute<T> {
     this.barrierColor,
     this.barrierDismissible = true,
     this.barrierLabel,
-    this.transitionDuration,
-    this.reverseTransitionDuration,
-    _ModalTransitionBuilder transitionBuilder,
-    @required this.builder,
-  })  : assert(barrierDismissible != null),
-        assert(!barrierDismissible || barrierLabel != null),
-        _transitionBuilder = transitionBuilder;
+    required this.transitionDuration,
+    required this.reverseTransitionDuration,
+    required _ModalTransitionBuilder transitionBuilder,
+    required this.builder,
+    RouteSettings? routeSettings,
+    super.filter,
+  })  : assert(!barrierDismissible || barrierLabel != null),
+        _transitionBuilder = transitionBuilder,
+        super(settings: routeSettings);
 
   @override
-  final Color barrierColor;
+  final Color? barrierColor;
 
   @override
   final bool barrierDismissible;
 
   @override
-  final String barrierLabel;
+  final String? barrierLabel;
 
   @override
   final Duration transitionDuration;
 
-  // TODO(shihaohong): Remove the override analyzer ignore once
-  // Flutter stable contains https://github.com/flutter/flutter/pull/48274.
   @override
-  // ignore: override_on_non_overriding_member
   final Duration reverseTransitionDuration;
 
   /// The primary contents of the modal.
@@ -125,16 +131,16 @@ class _ModalRoute<T> extends PopupRoute<T> {
   ) {
     final ThemeData theme = Theme.of(context);
     return Semantics(
+      scopesRoute: true,
+      explicitChildNodes: true,
       child: SafeArea(
         child: Builder(
           builder: (BuildContext context) {
             final Widget child = Builder(builder: builder);
-            return theme != null ? Theme(data: theme, child: child) : child;
+            return Theme(data: theme, child: child);
           },
         ),
       ),
-      scopesRoute: true,
-      explicitChildNodes: true,
     );
   }
 
@@ -177,17 +183,13 @@ abstract class ModalConfiguration {
   /// duration of the transitions when the modal enters and exits the
   /// application. [transitionDuration] and [reverseTransitionDuration]
   /// cannot be null.
-  ModalConfiguration({
-    @required this.barrierColor,
-    @required this.barrierDismissible,
+  const ModalConfiguration({
+    required this.barrierColor,
+    required this.barrierDismissible,
     this.barrierLabel,
-    @required this.transitionDuration,
-    @required this.reverseTransitionDuration,
-  })  : assert(barrierColor != null),
-        assert(barrierDismissible != null),
-        assert(!barrierDismissible || barrierLabel != null),
-        assert(transitionDuration != null),
-        assert(reverseTransitionDuration != null);
+    required this.transitionDuration,
+    required this.reverseTransitionDuration,
+  }) : assert(!barrierDismissible || barrierLabel != null);
 
   /// The color to use for the modal barrier. If this is null, the barrier will
   /// be transparent.
@@ -197,7 +199,7 @@ abstract class ModalConfiguration {
   final bool barrierDismissible;
 
   /// The semantic label used for a dismissible barrier.
-  final String barrierLabel;
+  final String? barrierLabel;
 
   /// The duration of the transition running forwards.
   final Duration transitionDuration;

@@ -1,24 +1,27 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
 import 'package:animations/animations.dart';
+import 'package:flutter/material.dart';
 
 /// The demo page for [SharedAxisPageTransitionsBuilder].
 class SharedAxisTransitionDemo extends StatefulWidget {
+  /// Creates the demo page for [SharedAxisPageTransitionsBuilder].
+  const SharedAxisTransitionDemo({super.key});
+
   @override
-  _SharedAxisTransitionDemoState createState() {
+  State<SharedAxisTransitionDemo> createState() {
     return _SharedAxisTransitionDemoState();
   }
 }
 
 class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
-  SharedAxisTransitionType _transitionType =
+  SharedAxisTransitionType? _transitionType =
       SharedAxisTransitionType.horizontal;
   bool _isLoggedIn = false;
 
-  void _updateTransitionType(SharedAxisTransitionType newType) {
+  void _updateTransitionType(SharedAxisTransitionType? newType) {
     setState(() {
       _transitionType = newType;
     });
@@ -40,7 +43,6 @@ class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
           children: <Widget>[
             Expanded(
               child: PageTransitionSwitcher(
-                duration: const Duration(milliseconds: 300),
                 reverse: !_isLoggedIn,
                 transitionBuilder: (
                   Widget child,
@@ -48,10 +50,10 @@ class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
                   Animation<double> secondaryAnimation,
                 ) {
                   return SharedAxisTransition(
-                    child: child,
                     animation: animation,
                     secondaryAnimation: secondaryAnimation,
-                    transitionType: _transitionType,
+                    transitionType: _transitionType!,
+                    child: child,
                   );
                 },
                 child: _isLoggedIn ? _CoursePage() : _SignInPage(),
@@ -62,16 +64,12 @@ class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  FlatButton(
+                  TextButton(
                     onPressed: _isLoggedIn ? _toggleLoginStatus : null,
-                    textColor: Theme.of(context).colorScheme.primary,
                     child: const Text('BACK'),
                   ),
-                  RaisedButton(
+                  ElevatedButton(
                     onPressed: _isLoggedIn ? null : _toggleLoginStatus,
-                    color: Theme.of(context).colorScheme.primary,
-                    textColor: Theme.of(context).colorScheme.onPrimary,
-                    disabledColor: Colors.black12,
                     child: const Text('NEXT'),
                   ),
                 ],
@@ -84,7 +82,7 @@ class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
                 Radio<SharedAxisTransitionType>(
                   value: SharedAxisTransitionType.horizontal,
                   groupValue: _transitionType,
-                  onChanged: (SharedAxisTransitionType newValue) {
+                  onChanged: (SharedAxisTransitionType? newValue) {
                     _updateTransitionType(newValue);
                   },
                 ),
@@ -92,7 +90,7 @@ class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
                 Radio<SharedAxisTransitionType>(
                   value: SharedAxisTransitionType.vertical,
                   groupValue: _transitionType,
-                  onChanged: (SharedAxisTransitionType newValue) {
+                  onChanged: (SharedAxisTransitionType? newValue) {
                     _updateTransitionType(newValue);
                   },
                 ),
@@ -100,7 +98,7 @@ class _SharedAxisTransitionDemoState extends State<SharedAxisTransitionDemo> {
                 Radio<SharedAxisTransitionType>(
                   value: SharedAxisTransitionType.scaled,
                   groupValue: _transitionType,
-                  onChanged: (SharedAxisTransitionType newValue) {
+                  onChanged: (SharedAxisTransitionType? newValue) {
                     _updateTransitionType(newValue);
                   },
                 ),
@@ -122,10 +120,7 @@ class _CoursePage extends StatelessWidget {
         const Padding(padding: EdgeInsets.symmetric(vertical: 8.0)),
         Text(
           'Streamling your courses',
-          // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-          // Material text style nomenclature.
-          // ignore: deprecated_member_use
-          style: Theme.of(context).textTheme.headline,
+          style: Theme.of(context).textTheme.headlineSmall,
           textAlign: TextAlign.center,
         ),
         const Padding(padding: EdgeInsets.symmetric(vertical: 5.0)),
@@ -153,7 +148,7 @@ class _CoursePage extends StatelessWidget {
 
 class _CourseSwitch extends StatefulWidget {
   const _CourseSwitch({
-    this.course,
+    required this.course,
   });
 
   final String course;
@@ -197,10 +192,7 @@ class _SignInPage extends StatelessWidget {
             Padding(padding: EdgeInsets.symmetric(vertical: maxHeight / 50)),
             Text(
               'Hi David Park',
-              // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-              // Material text style nomenclature.
-              // ignore: deprecated_member_use
-              style: Theme.of(context).textTheme.headline,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             Padding(padding: EdgeInsets.symmetric(vertical: maxHeight / 50)),
             const Text(
@@ -235,17 +227,15 @@ class _SignInPage extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 10.0),
-                  child: FlatButton(
+                  child: TextButton(
                     onPressed: () {},
-                    textColor: Theme.of(context).colorScheme.primary,
                     child: const Text('FORGOT EMAIL?'),
                   ),
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 10.0),
-                  child: FlatButton(
+                  child: TextButton(
                     onPressed: () {},
-                    textColor: Theme.of(context).colorScheme.primary,
                     child: const Text('CREATE ACCOUNT'),
                   ),
                 ),

@@ -1,4 +1,4 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@ import 'package:animations/src/fade_scale_transition.dart';
 import 'package:animations/src/modal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/widgets.dart';
 
 void main() {
   testWidgets(
@@ -17,24 +16,23 @@ void main() {
           home: Scaffold(
             body: Builder(builder: (BuildContext context) {
               return Center(
-                child: RaisedButton(
+                child: ElevatedButton(
                   onPressed: () {
                     showModal<void>(
                       context: context,
-                      configuration: FadeScaleTransitionConfiguration(),
                       builder: (BuildContext context) {
                         return const _FlutterLogoModal();
                       },
                     );
                   },
-                  child: Icon(Icons.add),
+                  child: const Icon(Icons.add),
                 ),
               );
             }),
           ),
         ),
       );
-      await tester.tap(find.byType(RaisedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pumpAndSettle();
       expect(find.byType(_FlutterLogoModal), findsOneWidget);
     },
@@ -49,24 +47,23 @@ void main() {
           home: Scaffold(
             body: Builder(builder: (BuildContext context) {
               return Center(
-                child: RaisedButton(
+                child: ElevatedButton(
                   onPressed: () {
                     showModal<void>(
                       context: context,
-                      configuration: FadeScaleTransitionConfiguration(),
                       builder: (BuildContext context) {
                         return _FlutterLogoModal(key: key);
                       },
                     );
                   },
-                  child: Icon(Icons.add),
+                  child: const Icon(Icons.add),
                 ),
               );
             }),
           ),
         ),
       );
-      await tester.tap(find.byType(RaisedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
       // Opacity duration: First 30% of 150ms, linear transition
       double topFadeTransitionOpacity = _getOpacity(key, tester);
@@ -117,17 +114,16 @@ void main() {
           home: Scaffold(
             body: Builder(builder: (BuildContext context) {
               return Center(
-                child: RaisedButton(
+                child: ElevatedButton(
                   onPressed: () {
                     showModal<void>(
                       context: context,
-                      configuration: FadeScaleTransitionConfiguration(),
                       builder: (BuildContext context) {
                         return _FlutterLogoModal(key: key);
                       },
                     );
                   },
-                  child: Icon(Icons.add),
+                  child: const Icon(Icons.add),
                 ),
               );
             }),
@@ -135,7 +131,7 @@ void main() {
         ),
       );
       // Show the incoming modal and let it animate in fully.
-      await tester.tap(find.byType(RaisedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pumpAndSettle();
 
       // Tap on modal barrier to start reverse animation.
@@ -182,17 +178,16 @@ void main() {
           home: Scaffold(
             body: Builder(builder: (BuildContext context) {
               return Center(
-                child: RaisedButton(
+                child: ElevatedButton(
                   onPressed: () {
                     showModal<void>(
                       context: context,
-                      configuration: FadeScaleTransitionConfiguration(),
                       builder: (BuildContext context) {
                         return _FlutterLogoModal(key: key);
                       },
                     );
                   },
-                  child: Icon(Icons.add),
+                  child: const Icon(Icons.add),
                 ),
               );
             }),
@@ -200,7 +195,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byType(RaisedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
       // Opacity duration: First 30% of 150ms, linear transition
       double topFadeTransitionOpacity = _getOpacity(key, tester);
@@ -283,11 +278,10 @@ void main() {
               return Center(
                 child: Column(
                   children: <Widget>[
-                    RaisedButton(
+                    ElevatedButton(
                       onPressed: () {
                         showModal<void>(
                           context: context,
-                          configuration: FadeScaleTransitionConfiguration(),
                           builder: (BuildContext context) {
                             return _FlutterLogoModal(
                               key: topKey,
@@ -296,7 +290,7 @@ void main() {
                           },
                         );
                       },
-                      child: Icon(Icons.add),
+                      child: const Icon(Icons.add),
                     ),
                     _FlutterLogoModal(
                       key: bottomKey,
@@ -317,7 +311,7 @@ void main() {
       expect(bottomState.widget.name, 'bottom route');
 
       // Start the enter transition of the modal route.
-      await tester.tap(find.byType(RaisedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
       await tester.pump();
 
@@ -394,6 +388,58 @@ void main() {
       expect(find.byKey(topKey), findsNothing);
     },
   );
+
+  testWidgets(
+    'should preserve state',
+    (WidgetTester tester) async {
+      final AnimationController controller = AnimationController(
+        vsync: const TestVSync(),
+        duration: const Duration(milliseconds: 300),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: FadeScaleTransition(
+                animation: controller,
+                child: const _FlutterLogoModal(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final State<StatefulWidget> state = tester.state(
+        find.byType(_FlutterLogoModal),
+      );
+      expect(state, isNotNull);
+
+      controller.forward();
+      await tester.pump();
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+      await tester.pumpAndSettle();
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+
+      controller.reverse();
+      await tester.pump();
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+      await tester.pumpAndSettle();
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+
+      controller.forward();
+      await tester.pump();
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+      await tester.pumpAndSettle();
+      expect(state, same(tester.state(find.byType(_FlutterLogoModal))));
+    },
+  );
 }
 
 double _getOpacity(GlobalKey key, WidgetTester tester) {
@@ -402,7 +448,7 @@ double _getOpacity(GlobalKey key, WidgetTester tester) {
     matching: find.byType(FadeTransition),
   );
   return tester.widgetList(finder).fold<double>(1.0, (double a, Widget widget) {
-    final FadeTransition transition = widget;
+    final FadeTransition transition = widget as FadeTransition;
     return a * transition.opacity.value;
   });
 }
@@ -413,18 +459,18 @@ double _getScale(GlobalKey key, WidgetTester tester) {
     matching: find.byType(ScaleTransition),
   );
   return tester.widgetList(finder).fold<double>(1.0, (double a, Widget widget) {
-    final ScaleTransition transition = widget;
+    final ScaleTransition transition = widget as ScaleTransition;
     return a * transition.scale.value;
   });
 }
 
 class _FlutterLogoModal extends StatefulWidget {
   const _FlutterLogoModal({
-    Key key,
+    super.key,
     this.name,
-  }) : super(key: key);
+  });
 
-  final String name;
+  final String? name;
 
   @override
   _FlutterLogoModalState createState() => _FlutterLogoModalState();

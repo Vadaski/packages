@@ -1,11 +1,10 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
 
 import 'modal.dart';
-import 'utils/curves.dart';
 
 /// The modal transition configuration for a Material fade transition.
 ///
@@ -21,7 +20,7 @@ import 'utils/curves.dart';
 ///   Widget build(BuildContext context) {
 ///     return Scaffold(
 ///       body: Center(
-///         child: RaisedButton(
+///         child: ElevatedButton(
 ///           onPressed: () {
 ///             showModal(
 ///               context: context,
@@ -65,19 +64,13 @@ class FadeScaleTransitionConfiguration extends ModalConfiguration {
   /// scrim dismisses the modal. [barrierLabel] sets the semantic label for
   /// a dismissible barrier. [barrierDismissible] cannot be null. If
   /// [barrierDismissible] is true, the [barrierLabel] cannot be null.
-  FadeScaleTransitionConfiguration({
-    Color barrierColor = Colors.black54,
-    bool barrierDismissible = true,
-    Duration transitionDuration = const Duration(milliseconds: 150),
-    Duration reverseTransitionDuration = const Duration(milliseconds: 75),
-    String barrierLabel = 'Dismiss',
-  }) : super(
-          barrierColor: barrierColor,
-          barrierDismissible: barrierDismissible,
-          barrierLabel: barrierLabel,
-          transitionDuration: transitionDuration,
-          reverseTransitionDuration: reverseTransitionDuration,
-        );
+  const FadeScaleTransitionConfiguration({
+    super.barrierColor = Colors.black54,
+    super.barrierDismissible = true,
+    super.transitionDuration = const Duration(milliseconds: 150),
+    super.reverseTransitionDuration = const Duration(milliseconds: 75),
+    String super.barrierLabel = 'Dismiss',
+  });
 
   @override
   Widget transitionBuilder(
@@ -102,7 +95,7 @@ class FadeScaleTransitionConfiguration extends ModalConfiguration {
 ///
 /// This widget is not to be confused with Flutter's [FadeTransition] widget,
 /// which animates only the opacity of its child widget.
-class FadeScaleTransition extends StatefulWidget {
+class FadeScaleTransition extends StatelessWidget {
   /// Creates a widget that implements the Material fade transition.
   ///
   /// The fade pattern is used for UI elements that enter or exit from within
@@ -116,11 +109,10 @@ class FadeScaleTransition extends StatefulWidget {
   /// [animation] is typically an [AnimationController] that drives the transition
   /// animation. [animation] cannot be null.
   const FadeScaleTransition({
-    Key key,
-    @required this.animation,
+    super.key,
+    required this.animation,
     this.child,
-  })  : assert(animation != null),
-        super(key: key);
+  });
 
   /// The animation that drives the [child]'s entrance and exit.
   ///
@@ -134,145 +126,48 @@ class FadeScaleTransition extends StatefulWidget {
   ///
   /// This widget will transition in and out as driven by [animation] and
   /// [secondaryAnimation].
-  final Widget child;
+  final Widget? child;
 
-  @override
-  _FadeScaleTransitionState createState() => _FadeScaleTransitionState();
-}
-
-class _FadeScaleTransitionState extends State<FadeScaleTransition> {
-  AnimationStatus _effectiveAnimationStatus;
-
-  @override
-  void initState() {
-    super.initState();
-    _effectiveAnimationStatus = widget.animation.status;
-    widget.animation.addStatusListener(_animationListener);
-  }
-
-  void _animationListener(AnimationStatus animationStatus) {
-    _effectiveAnimationStatus = _calculateEffectiveAnimationStatus(
-      lastEffective: _effectiveAnimationStatus,
-      current: animationStatus,
-    );
-  }
-
-  // When a transition is interrupted midway we just want to play the ongoing
-  // animation in reverse. Switching to the actual reverse transition would
-  // yield a disjoint experience since the forward and reverse transitions are
-  // very different.
-  AnimationStatus _calculateEffectiveAnimationStatus({
-    @required AnimationStatus lastEffective,
-    @required AnimationStatus current,
-  }) {
-    assert(current != null);
-    assert(lastEffective != null);
-    switch (current) {
-      case AnimationStatus.dismissed:
-      case AnimationStatus.completed:
-        return current;
-      case AnimationStatus.forward:
-        switch (lastEffective) {
-          case AnimationStatus.dismissed:
-          case AnimationStatus.completed:
-          case AnimationStatus.forward:
-            return current;
-          case AnimationStatus.reverse:
-            return lastEffective;
-        }
-        break;
-      case AnimationStatus.reverse:
-        switch (lastEffective) {
-          case AnimationStatus.dismissed:
-          case AnimationStatus.completed:
-          case AnimationStatus.reverse:
-            return current;
-          case AnimationStatus.forward:
-            return lastEffective;
-        }
-        break;
-    }
-    return null; // unreachable
-  }
-
-  void _updateAnimationListener(
-    Animation<double> oldAnimation,
-    Animation<double> animation,
-  ) {
-    if (oldAnimation != animation) {
-      oldAnimation.removeStatusListener(_animationListener);
-      animation.addStatusListener(_animationListener);
-      _animationListener(animation.status);
-    }
-  }
-
-  @override
-  void didUpdateWidget(FadeScaleTransition oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _updateAnimationListener(
-      oldWidget.animation,
-      widget.animation,
-    );
-  }
-
-  @override
-  void dispose() {
-    widget.animation.removeStatusListener(_animationListener);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: widget.animation,
-      builder: (BuildContext context, Widget child) {
-        assert(_effectiveAnimationStatus != null);
-        switch (_effectiveAnimationStatus) {
-          case AnimationStatus.forward:
-            return _EnterTransition(
-              animation: widget.animation,
-              child: child,
-            );
-          case AnimationStatus.dismissed:
-          case AnimationStatus.reverse:
-          case AnimationStatus.completed:
-            return FadeTransition(
-              opacity: widget.animation,
-              child: child,
-            );
-        }
-        return null; // unreachable
-      },
-      child: widget.child,
-    );
-  }
-}
-
-class _EnterTransition extends StatelessWidget {
-  const _EnterTransition({
-    this.animation,
-    this.child,
-  });
-
-  final Animation<double> animation;
-  final Widget child;
-
-  static Animatable<double> fadeInTransition = CurveTween(
+  static final Animatable<double> _fadeInTransition = CurveTween(
     curve: const Interval(0.0, 0.3),
   );
-  static Animatable<double> scaleInTransition = Tween<double>(
+  static final Animatable<double> _scaleInTransition = Tween<double>(
     begin: 0.80,
     end: 1.00,
-  ).chain(CurveTween(curve: decelerateEasing));
+  ).chain(CurveTween(curve: Easing.legacyDecelerate));
+  static final Animatable<double> _fadeOutTransition = Tween<double>(
+    begin: 1.0,
+    end: 0.0,
+  );
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: fadeInTransition.animate(animation),
-      child: ScaleTransition(
-        scale: scaleInTransition.animate(animation),
-        child: child,
-      ),
+    return DualTransitionBuilder(
+      animation: animation,
+      forwardBuilder: (
+        BuildContext context,
+        Animation<double> animation,
+        Widget? child,
+      ) {
+        return FadeTransition(
+          opacity: _fadeInTransition.animate(animation),
+          child: ScaleTransition(
+            scale: _scaleInTransition.animate(animation),
+            child: child,
+          ),
+        );
+      },
+      reverseBuilder: (
+        BuildContext context,
+        Animation<double> animation,
+        Widget? child,
+      ) {
+        return FadeTransition(
+          opacity: _fadeOutTransition.animate(animation),
+          child: child,
+        );
+      },
+      child: child,
     );
   }
 }

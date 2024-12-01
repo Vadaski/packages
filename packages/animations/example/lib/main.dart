@@ -1,4 +1,4 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class _TransitionsHomePageState extends State<_TransitionsHomePage> {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (BuildContext context) {
-                          return OpenContainerTransformDemo();
+                          return const OpenContainerTransformDemo();
                         },
                       ),
                     );
@@ -64,7 +64,7 @@ class _TransitionsHomePageState extends State<_TransitionsHomePage> {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (BuildContext context) {
-                          return SharedAxisTransitionDemo();
+                          return const SharedAxisTransitionDemo();
                         },
                       ),
                     );
@@ -77,7 +77,7 @@ class _TransitionsHomePageState extends State<_TransitionsHomePage> {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (BuildContext context) {
-                          return FadeThroughTransitionDemo();
+                          return const FadeThroughTransitionDemo();
                         },
                       ),
                     );
@@ -90,7 +90,7 @@ class _TransitionsHomePageState extends State<_TransitionsHomePage> {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (BuildContext context) {
-                          return FadeScaleTransitionDemo();
+                          return const FadeScaleTransitionDemo();
                         },
                       ),
                     );
@@ -126,11 +126,11 @@ class _TransitionsHomePageState extends State<_TransitionsHomePage> {
 class _TransitionListTile extends StatelessWidget {
   const _TransitionListTile({
     this.onTap,
-    this.title,
-    this.subtitle,
+    required this.title,
+    required this.subtitle,
   });
 
-  final GestureTapCallback onTap;
+  final GestureTapCallback? onTap;
   final String title;
   final String subtitle;
 
@@ -149,7 +149,7 @@ class _TransitionListTile extends StatelessWidget {
             color: Colors.black54,
           ),
         ),
-        child: Icon(
+        child: const Icon(
           Icons.play_arrow,
           size: 35,
         ),

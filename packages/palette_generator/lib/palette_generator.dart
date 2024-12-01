@@ -1,18 +1,41 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+// TODO(goderbauer): Fix this warning for the classes in this file.
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
 
 import 'dart:async';
 import 'dart:collection';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:ui' show Color;
+import 'dart:ui' show Color, ImageByteFormat;
 
 import 'package:collection/collection.dart'
-    show PriorityQueue, HeapPriorityQueue;
+    show HeapPriorityQueue, PriorityQueue;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+
+/// A description of an encoded image.
+///
+/// Used in [PaletteGenerator.fromByteData].
+class EncodedImage {
+  /// Creates a description of an encoded image.
+  const EncodedImage(
+    this.byteData, {
+    required this.width,
+    required this.height,
+  });
+
+  /// Encoded image byte data.
+  final ByteData byteData;
+
+  /// Image width.
+  final int width;
+
+  /// Image height.
+  final int height;
+}
 
 /// A class to extract prominent colors from an image for use as user interface
 /// colors.
@@ -59,20 +82,85 @@ import 'package:flutter/painting.dart';
 ///   * [PaletteTarget], to be able to create your own target color types.
 ///   * [PaletteFilter], a function signature for filtering the allowed colors
 ///     in the palette.
-class PaletteGenerator with DiagnosticableMixin {
+class PaletteGenerator with Diagnosticable {
   /// Create a [PaletteGenerator] from a set of paletteColors and targets.
   ///
   /// The usual way to create a [PaletteGenerator] is to use the asynchronous
   /// [PaletteGenerator.fromImage] static function. This constructor is mainly
   /// used for cases when you have your own source of color information and
   /// would like to use the target selection and scoring methods here.
-  ///
-  /// The [paletteColors] argument must not be null.
-  PaletteGenerator.fromColors(this.paletteColors, {this.targets})
-      : assert(paletteColors != null),
-        selectedSwatches = <PaletteTarget, PaletteColor>{} {
+  PaletteGenerator.fromColors(
+    this.paletteColors, {
+    this.targets = const <PaletteTarget>[],
+  }) : selectedSwatches = <PaletteTarget, PaletteColor>{} {
     _sortSwatches();
     _selectSwatches();
+  }
+
+  // TODO(gspencergoog): remove `dart:ui` paragraph from [fromByteData] method when https://github.com/flutter/flutter/issues/10647 is resolved
+
+  /// Create a [PaletteGenerator] asynchronously from encoded image [ByteData],
+  /// width, and height. These parameters are packed in [EncodedImage].
+  ///
+  /// The image encoding must be RGBA with 8 bits per channel, this corresponds to
+  /// [ImageByteFormat.rawRgba] or [ImageByteFormat.rawStraightRgba].
+  ///
+  /// In contast with [fromImage] and [fromImageProvider] this method can be used
+  /// in non-root isolates, because it doesn't involve interaction with the
+  /// `dart:ui` library, which is currently not supported, see https://github.com/flutter/flutter/issues/10647.
+  ///
+  /// The [region] specifies the part of the image to inspect for color
+  /// candidates. By default it uses the entire image. Must not be equal to
+  /// [Rect.zero], and must not be larger than the image dimensions.
+  ///
+  /// The [maximumColorCount] sets the maximum number of colors that will be
+  /// returned in the [PaletteGenerator]. The default is 16 colors.
+  ///
+  /// The [filters] specify a lost of [PaletteFilter] instances that can be used
+  /// to include certain colors in the list of colors. The default filter is
+  /// an instance of [AvoidRedBlackWhitePaletteFilter], which stays away from
+  /// whites, blacks, and low-saturation reds.
+  ///
+  /// The [targets] are a list of target color types, specified by creating
+  /// custom [PaletteTarget]s. By default, this is the list of targets in
+  /// [PaletteTarget.baseTargets].
+  static Future<PaletteGenerator> fromByteData(
+    EncodedImage encodedImage, {
+    Rect? region,
+    int maximumColorCount = _defaultCalculateNumberColors,
+    List<PaletteFilter> filters = const <PaletteFilter>[
+      avoidRedBlackWhitePaletteFilter
+    ],
+    List<PaletteTarget> targets = const <PaletteTarget>[],
+  }) async {
+    assert(region == null || region != Rect.zero);
+    assert(
+        region == null ||
+            (region.topLeft.dx >= 0.0 && region.topLeft.dy >= 0.0),
+        'Region $region is outside the image ${encodedImage.width}x${encodedImage.height}');
+    assert(
+        region == null ||
+            (region.bottomRight.dx <= encodedImage.width &&
+                region.bottomRight.dy <= encodedImage.height),
+        'Region $region is outside the image ${encodedImage.width}x${encodedImage.height}');
+    assert(
+      encodedImage.byteData.lengthInBytes ~/ 4 ==
+          encodedImage.width * encodedImage.height,
+      "Image byte data doesn't match the image size, or has invalid encoding. "
+      'The encoding must be RGBA with 8 bits per channel.',
+    );
+
+    final _ColorCutQuantizer quantizer = _ColorCutQuantizer(
+      encodedImage,
+      maxColors: maximumColorCount,
+      filters: filters,
+      region: region,
+    );
+    final List<PaletteColor> colors = await quantizer.quantizedColors;
+    return PaletteGenerator.fromColors(
+      colors,
+      targets: targets,
+    );
   }
 
   /// Create a [PaletteGenerator] from an [dart:ui.Image] asynchronously.
@@ -92,38 +180,29 @@ class PaletteGenerator with DiagnosticableMixin {
   /// The [targets] are a list of target color types, specified by creating
   /// custom [PaletteTarget]s. By default, this is the list of targets in
   /// [PaletteTarget.baseTargets].
-  ///
-  /// The [image] must not be null.
   static Future<PaletteGenerator> fromImage(
     ui.Image image, {
-    Rect region,
-    int maximumColorCount,
-    List<PaletteFilter> filters,
-    List<PaletteTarget> targets,
+    Rect? region,
+    int maximumColorCount = _defaultCalculateNumberColors,
+    List<PaletteFilter> filters = const <PaletteFilter>[
+      avoidRedBlackWhitePaletteFilter
+    ],
+    List<PaletteTarget> targets = const <PaletteTarget>[],
   }) async {
-    assert(image != null);
-    assert(region == null || region != Rect.zero);
-    assert(
-        region == null ||
-            (region.topLeft.dx >= 0.0 && region.topLeft.dy >= 0.0),
-        'Region $region is outside the image ${image.width}x${image.height}');
-    assert(
-        region == null ||
-            (region.bottomRight.dx <= image.width &&
-                region.bottomRight.dy <= image.height),
-        'Region $region is outside the image ${image.width}x${image.height}');
+    final ByteData? imageData = await image.toByteData();
+    if (imageData == null) {
+      throw StateError('Failed to encode the image.');
+    }
 
-    filters ??= <PaletteFilter>[avoidRedBlackWhitePaletteFilter];
-    maximumColorCount ??= _defaultCalculateNumberColors;
-    final _ColorCutQuantizer quantizer = _ColorCutQuantizer(
-      image,
-      maxColors: maximumColorCount,
-      filters: filters,
+    return PaletteGenerator.fromByteData(
+      EncodedImage(
+        imageData,
+        width: image.width,
+        height: image.height,
+      ),
       region: region,
-    );
-    final List<PaletteColor> colors = await quantizer.quantizedColors;
-    return PaletteGenerator.fromColors(
-      colors,
+      maximumColorCount: maximumColorCount,
+      filters: filters,
       targets: targets,
     );
   }
@@ -153,38 +232,36 @@ class PaletteGenerator with DiagnosticableMixin {
   /// The [timeout] describes how long to wait for the image to load before
   /// giving up on it. A value of Duration.zero implies waiting forever. The
   /// default timeout is 15 seconds.
-  ///
-  /// The [imageProvider] and [timeout] arguments must not be null.
   static Future<PaletteGenerator> fromImageProvider(
     ImageProvider imageProvider, {
-    Size size,
-    Rect region,
-    int maximumColorCount,
-    List<PaletteFilter> filters,
-    List<PaletteTarget> targets,
+    Size? size,
+    Rect? region,
+    int maximumColorCount = _defaultCalculateNumberColors,
+    List<PaletteFilter> filters = const <PaletteFilter>[
+      avoidRedBlackWhitePaletteFilter
+    ],
+    List<PaletteTarget> targets = const <PaletteTarget>[],
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    assert(imageProvider != null);
-    assert(timeout != null);
-    assert(region == null || (region != null && size != null));
+    assert(region == null || size != null);
     assert(region == null || region != Rect.zero);
     assert(
         region == null ||
             (region.topLeft.dx >= 0.0 && region.topLeft.dy >= 0.0),
-        'Region $region is outside the image ${size.width}x${size.height}');
-    assert(region == null || size.contains(region.topLeft),
+        'Region $region is outside the image ${size!.width}x${size.height}');
+    assert(region == null || size!.contains(region.topLeft),
         'Region $region is outside the image $size');
     assert(
         region == null ||
-            (region.bottomRight.dx <= size.width &&
+            (region.bottomRight.dx <= size!.width &&
                 region.bottomRight.dy <= size.height),
         'Region $region is outside the image $size');
     final ImageStream stream = imageProvider.resolve(
       ImageConfiguration(size: size, devicePixelRatio: 1.0),
     );
     final Completer<ui.Image> imageCompleter = Completer<ui.Image>();
-    Timer loadFailureTimeout;
-    ImageStreamListener listener;
+    Timer? loadFailureTimeout;
+    late ImageStreamListener listener;
     listener = ImageStreamListener((ImageInfo info, bool synchronousCall) {
       loadFailureTimeout?.cancel();
       stream.removeListener(listener);
@@ -201,9 +278,20 @@ class PaletteGenerator with DiagnosticableMixin {
       });
     }
     stream.addListener(listener);
+    final ui.Image image = await imageCompleter.future;
+    ui.Rect? newRegion = region;
+    if (size != null && region != null) {
+      final double scale = image.width / size.width;
+      newRegion = Rect.fromLTRB(
+        region.left * scale,
+        region.top * scale,
+        region.right * scale,
+        region.bottom * scale,
+      );
+    }
     return PaletteGenerator.fromImage(
-      await imageCompleter.future,
-      region: region,
+      image,
+      region: newRegion,
       maximumColorCount: maximumColorCount,
       filters: filters,
       targets: targets,
@@ -228,41 +316,41 @@ class PaletteGenerator with DiagnosticableMixin {
   /// Returns a list of colors in the [paletteColors], sorted from most
   /// dominant to least dominant color.
   Iterable<Color> get colors sync* {
-    for (PaletteColor paletteColor in paletteColors) {
+    for (final PaletteColor paletteColor in paletteColors) {
       yield paletteColor.color;
     }
   }
 
   /// Returns a vibrant color from the palette. Might be null if an appropriate
   /// target color could not be found.
-  PaletteColor get vibrantColor => selectedSwatches[PaletteTarget.vibrant];
+  PaletteColor? get vibrantColor => selectedSwatches[PaletteTarget.vibrant];
 
   /// Returns a light and vibrant color from the palette. Might be null if an
   /// appropriate target color could not be found.
-  PaletteColor get lightVibrantColor =>
+  PaletteColor? get lightVibrantColor =>
       selectedSwatches[PaletteTarget.lightVibrant];
 
   /// Returns a dark and vibrant color from the palette. Might be null if an
   /// appropriate target color could not be found.
-  PaletteColor get darkVibrantColor =>
+  PaletteColor? get darkVibrantColor =>
       selectedSwatches[PaletteTarget.darkVibrant];
 
   /// Returns a muted color from the palette. Might be null if an appropriate
   /// target color could not be found.
-  PaletteColor get mutedColor => selectedSwatches[PaletteTarget.muted];
+  PaletteColor? get mutedColor => selectedSwatches[PaletteTarget.muted];
 
   /// Returns a muted and light color from the palette. Might be null if an
   /// appropriate target color could not be found.
-  PaletteColor get lightMutedColor =>
+  PaletteColor? get lightMutedColor =>
       selectedSwatches[PaletteTarget.lightMuted];
 
   /// Returns a muted and dark color from the palette. Might be null if an
   /// appropriate target color could not be found.
-  PaletteColor get darkMutedColor => selectedSwatches[PaletteTarget.darkMuted];
+  PaletteColor? get darkMutedColor => selectedSwatches[PaletteTarget.darkMuted];
 
   /// The dominant color (the color with the largest population).
-  PaletteColor get dominantColor => _dominantColor;
-  PaletteColor _dominantColor;
+  PaletteColor? get dominantColor => _dominantColor;
+  PaletteColor? _dominantColor;
 
   void _sortSwatches() {
     if (paletteColors.isEmpty) {
@@ -277,18 +365,22 @@ class PaletteGenerator with DiagnosticableMixin {
   }
 
   void _selectSwatches() {
-    final Set<PaletteTarget> allTargets = Set<PaletteTarget>.from(
-        (targets ?? <PaletteTarget>[]) + PaletteTarget.baseTargets);
+    final Set<PaletteTarget> allTargets =
+        Set<PaletteTarget>.from(targets + PaletteTarget.baseTargets);
     final Set<Color> usedColors = <Color>{};
-    for (PaletteTarget target in allTargets) {
+    for (final PaletteTarget target in allTargets) {
       target._normalizeWeights();
-      selectedSwatches[target] = _generateScoredTarget(target, usedColors);
+      final PaletteColor? targetScore =
+          _generateScoredTarget(target, usedColors);
+      if (targetScore != null) {
+        selectedSwatches[target] = targetScore;
+      }
     }
   }
 
-  PaletteColor _generateScoredTarget(
+  PaletteColor? _generateScoredTarget(
       PaletteTarget target, Set<Color> usedColors) {
-    final PaletteColor maxScoreSwatch =
+    final PaletteColor? maxScoreSwatch =
         _getMaxScoredSwatchForTarget(target, usedColors);
     if (maxScoreSwatch != null && target.isExclusive) {
       // If we have a color, and the target is exclusive, add the color to the
@@ -298,11 +390,11 @@ class PaletteGenerator with DiagnosticableMixin {
     return maxScoreSwatch;
   }
 
-  PaletteColor _getMaxScoredSwatchForTarget(
+  PaletteColor? _getMaxScoredSwatchForTarget(
       PaletteTarget target, Set<Color> usedColors) {
     double maxScore = 0.0;
-    PaletteColor maxScoreSwatch;
-    for (PaletteColor paletteColor in paletteColors) {
+    PaletteColor? maxScoreSwatch;
+    for (final PaletteColor paletteColor in paletteColors) {
       if (_shouldBeScoredForTarget(paletteColor, target, usedColors)) {
         final double score = _generateScore(paletteColor, target);
         if (maxScoreSwatch == null || score > maxScore) {
@@ -341,9 +433,9 @@ class PaletteGenerator with DiagnosticableMixin {
       valueScore = target.lightnessWeight *
           (1.0 - (hslColor.lightness - target.targetLightness).abs());
     }
-    if (target.populationWeight > 0.0) {
+    if (_dominantColor != null && target.populationWeight > 0.0) {
       populationScore = target.populationWeight *
-          (paletteColor.population / _dominantColor.population);
+          (paletteColor.population / _dominantColor!.population);
     }
 
     return saturationScore + valueScore + populationScore;
@@ -369,10 +461,8 @@ class PaletteGenerator with DiagnosticableMixin {
 /// See also:
 ///
 ///   * [PaletteGenerator], a class for selecting color palettes from images.
-class PaletteTarget with DiagnosticableMixin {
+class PaletteTarget with Diagnosticable {
   /// Creates a [PaletteTarget] for custom palette selection.
-  ///
-  /// None of the arguments can be null.
   PaletteTarget({
     this.minimumSaturation = 0.0,
     this.targetSaturation = 0.5,
@@ -381,37 +471,31 @@ class PaletteTarget with DiagnosticableMixin {
     this.targetLightness = 0.5,
     this.maximumLightness = 1.0,
     this.isExclusive = true,
-  })  : assert(minimumSaturation != null),
-        assert(targetSaturation != null),
-        assert(maximumSaturation != null),
-        assert(minimumLightness != null),
-        assert(targetLightness != null),
-        assert(maximumLightness != null),
-        assert(isExclusive != null);
+  });
 
-  /// The minimum saturation value for this target. Must not be null.
+  /// The minimum saturation value for this target.
   final double minimumSaturation;
 
-  /// The target saturation value for this target. Must not be null.
+  /// The target saturation value for this target.
   final double targetSaturation;
 
-  /// The maximum saturation value for this target. Must not be null.
+  /// The maximum saturation value for this target.
   final double maximumSaturation;
 
-  /// The minimum lightness value for this target. Must not be null.
+  /// The minimum lightness value for this target.
   final double minimumLightness;
 
-  /// The target lightness value for this target. Must not be null.
+  /// The target lightness value for this target.
   final double targetLightness;
 
-  /// The maximum lightness value for this target. Must not be null.
+  /// The maximum lightness value for this target.
   final double maximumLightness;
 
   /// Returns whether any color selected for this target is exclusive for this
   /// target only.
   ///
   /// If false, then the color can also be selected for other targets. Defaults
-  /// to true.  Must not be null.
+  /// to true.
   final bool isExclusive;
 
   /// The weight of importance that a color's saturation value has on selection.
@@ -430,7 +514,6 @@ class PaletteTarget with DiagnosticableMixin {
   static const double _targetLightLightness = 0.74;
 
   static const double _minNormalLightness = 0.3;
-  static const double _targetNormalLightness = 0.5;
   static const double _maxNormalLightness = 0.7;
 
   static const double _targetMutedSaturation = 0.3;
@@ -460,7 +543,6 @@ class PaletteTarget with DiagnosticableMixin {
   /// One of the base set of `targets` for [PaletteGenerator.fromImage], in [baseTargets].
   static final PaletteTarget vibrant = PaletteTarget(
     minimumLightness: _minNormalLightness,
-    targetLightness: _targetNormalLightness,
     maximumLightness: _maxNormalLightness,
     minimumSaturation: _minVibrantSaturation,
     targetSaturation: _targetVibrantSaturation,
@@ -494,7 +576,6 @@ class PaletteTarget with DiagnosticableMixin {
   /// One of the base set of `targets` for [PaletteGenerator.fromImage], in [baseTargets].
   static final PaletteTarget muted = PaletteTarget(
     minimumLightness: _minNormalLightness,
-    targetLightness: _targetNormalLightness,
     maximumLightness: _maxNormalLightness,
     targetSaturation: _targetMutedSaturation,
     maximumSaturation: _maxMutedSaturation,
@@ -533,8 +614,9 @@ class PaletteTarget with DiagnosticableMixin {
   }
 
   @override
-  bool operator ==(dynamic other) {
-    return minimumSaturation == other.minimumSaturation &&
+  bool operator ==(Object other) {
+    return other is PaletteTarget &&
+        minimumSaturation == other.minimumSaturation &&
         targetSaturation == other.targetSaturation &&
         maximumSaturation == other.maximumSaturation &&
         minimumLightness == other.minimumLightness &&
@@ -547,7 +629,7 @@ class PaletteTarget with DiagnosticableMixin {
 
   @override
   int get hashCode {
-    return hashValues(
+    return Object.hash(
       minimumSaturation,
       targetSaturation,
       maximumSaturation,
@@ -597,13 +679,10 @@ typedef _ContrastCalculator = double Function(Color a, Color b, int alpha);
 /// See also:
 ///
 ///   * [PaletteGenerator], a class for selecting color palettes from images.
-class PaletteColor with DiagnosticableMixin {
+class PaletteColor with Diagnosticable {
   /// Generate a [PaletteColor].
-  ///
-  /// The `color` and `population` parameters must not be null.
-  PaletteColor(this.color, this.population)
-      : assert(color != null),
-        assert(population != null);
+  PaletteColor(this.color, this.population);
+
   static const double _minContrastTitleText = 3.0;
   static const double _minContrastBodyText = 4.5;
 
@@ -619,29 +698,29 @@ class PaletteColor with DiagnosticableMixin {
     if (_titleTextColor == null) {
       _ensureTextColorsGenerated();
     }
-    return _titleTextColor;
+    return _titleTextColor!;
   }
 
-  Color _titleTextColor;
+  Color? _titleTextColor;
 
   /// The color of body text for use with this palette color.
   Color get bodyTextColor {
     if (_bodyTextColor == null) {
       _ensureTextColorsGenerated();
     }
-    return _bodyTextColor;
+    return _bodyTextColor!;
   }
 
-  Color _bodyTextColor;
+  Color? _bodyTextColor;
 
   void _ensureTextColorsGenerated() {
     if (_titleTextColor == null || _bodyTextColor == null) {
       const Color white = Color(0xffffffff);
       const Color black = Color(0xff000000);
       // First check white, as most colors will be dark
-      final int lightBodyAlpha =
+      final int? lightBodyAlpha =
           _calculateMinimumAlpha(white, color, _minContrastBodyText);
-      final int lightTitleAlpha =
+      final int? lightTitleAlpha =
           _calculateMinimumAlpha(white, color, _minContrastTitleText);
 
       if (lightBodyAlpha != null && lightTitleAlpha != null) {
@@ -651,12 +730,12 @@ class PaletteColor with DiagnosticableMixin {
         return;
       }
 
-      final int darkBodyAlpha =
+      final int? darkBodyAlpha =
           _calculateMinimumAlpha(black, color, _minContrastBodyText);
-      final int darkTitleAlpha =
+      final int? darkTitleAlpha =
           _calculateMinimumAlpha(black, color, _minContrastTitleText);
 
-      if (darkBodyAlpha != null && darkBodyAlpha != null) {
+      if (darkBodyAlpha != null && darkTitleAlpha != null) {
         // If we found valid dark values, use them and return
         _bodyTextColor = black.withAlpha(darkBodyAlpha);
         _titleTextColor = black.withAlpha(darkTitleAlpha);
@@ -665,12 +744,12 @@ class PaletteColor with DiagnosticableMixin {
 
       // If we reach here then we can not find title and body values which use
       // the same lightness, we need to use mismatched values
-      _bodyTextColor = lightBodyAlpha != null //
+      _bodyTextColor = lightBodyAlpha != null
           ? white.withAlpha(lightBodyAlpha)
-          : black.withAlpha(darkBodyAlpha);
-      _titleTextColor = lightTitleAlpha != null //
+          : black.withAlpha(darkBodyAlpha ?? 255);
+      _titleTextColor = lightTitleAlpha != null
           ? white.withAlpha(lightTitleAlpha)
-          : black.withAlpha(darkTitleAlpha);
+          : black.withAlpha(darkTitleAlpha ?? 255);
     }
   }
 
@@ -699,10 +778,8 @@ class PaletteColor with DiagnosticableMixin {
   //
   // Returns the alpha value in the range 0-255, or null if no value could be
   // calculated.
-  static int _calculateMinimumAlpha(
+  static int? _calculateMinimumAlpha(
       Color foreground, Color background, double minContrastRatio) {
-    assert(foreground != null);
-    assert(background != null);
     assert(background.alpha == 0xff,
         'The background cannot be translucent: $background.');
     double contrastCalculator(Color fg, Color bg, int alpha) {
@@ -733,8 +810,6 @@ class PaletteColor with DiagnosticableMixin {
     double minContrastRatio,
     _ContrastCalculator calculator,
   ) {
-    assert(foreground != null);
-    assert(background != null);
     assert(background.alpha == 0xff,
         'The background cannot be translucent: $background.');
     const int minAlphaSearchMaxIterations = 10;
@@ -772,13 +847,13 @@ class PaletteColor with DiagnosticableMixin {
   }
 
   @override
-  int get hashCode {
-    return hashValues(color, population);
-  }
+  int get hashCode => Object.hash(color, population);
 
   @override
-  bool operator ==(dynamic other) {
-    return color == other.color && population == other.population;
+  bool operator ==(Object other) {
+    return other is PaletteColor &&
+        color == other.color &&
+        population == other.population;
   }
 }
 
@@ -801,18 +876,18 @@ typedef PaletteFilter = bool Function(HSLColor color);
 /// See also:
 ///  * [PaletteGenerator], a class for selecting color palettes from images.
 bool avoidRedBlackWhitePaletteFilter(HSLColor color) {
-  bool _isBlack(HSLColor hslColor) {
-    const double _blackMaxLightness = 0.05;
-    return hslColor.lightness <= _blackMaxLightness;
+  bool isBlack(HSLColor hslColor) {
+    const double blackMaxLightness = 0.05;
+    return hslColor.lightness <= blackMaxLightness;
   }
 
-  bool _isWhite(HSLColor hslColor) {
-    const double _whiteMinLightness = 0.95;
-    return hslColor.lightness >= _whiteMinLightness;
+  bool isWhite(HSLColor hslColor) {
+    const double whiteMinLightness = 0.95;
+    return hslColor.lightness >= whiteMinLightness;
   }
 
   // Returns true if the color is close to the red side of the I line.
-  bool _isNearRedILine(HSLColor hslColor) {
+  bool isNearRedILine(HSLColor hslColor) {
     const double redLineMinHue = 10.0;
     const double redLineMaxHue = 37.0;
     const double redLineMaxSaturation = 0.82;
@@ -821,7 +896,7 @@ bool avoidRedBlackWhitePaletteFilter(HSLColor color) {
         hslColor.saturation <= redLineMaxSaturation;
   }
 
-  return !_isWhite(color) && !_isBlack(color) && !_isNearRedILine(color);
+  return !isWhite(color) && !isBlack(color) && !isNearRedILine(color);
 }
 
 enum _ColorComponent {
@@ -833,9 +908,7 @@ enum _ColorComponent {
 /// A box that represents a volume in the RGB color space.
 class _ColorVolumeBox {
   _ColorVolumeBox(
-      this._lowerIndex, this._upperIndex, this.histogram, this.colors)
-      : assert(histogram != null),
-        assert(colors != null) {
+      this._lowerIndex, this._upperIndex, this.histogram, this.colors) {
     _fitMinimumBox();
   }
 
@@ -847,15 +920,15 @@ class _ColorVolumeBox {
   int _upperIndex;
 
   // The population of colors within this box.
-  int _population;
+  late int _population;
 
   // Bounds in each of the dimensions.
-  int _minRed;
-  int _maxRed;
-  int _minGreen;
-  int _maxGreen;
-  int _minBlue;
-  int _maxBlue;
+  late int _minRed;
+  late int _maxRed;
+  late int _minGreen;
+  late int _maxGreen;
+  late int _minBlue;
+  late int _maxBlue;
 
   int getVolume() {
     return (_maxRed - _minRed + 1) *
@@ -884,7 +957,7 @@ class _ColorVolumeBox {
     int count = 0;
     for (int i = _lowerIndex; i <= _upperIndex; i++) {
       final Color color = colors[i];
-      count += histogram[color].value;
+      count += histogram[color]!.value;
       if (color.red > maxRed) {
         maxRed = color.red;
       }
@@ -971,7 +1044,6 @@ class _ColorVolumeBox {
           final int bValue = makeValue(b.blue, b.green, b.red);
           return aValue.compareTo(bValue);
       }
-      return 0;
     }
 
     // We need to sort the colors in this box based on the longest color
@@ -982,7 +1054,7 @@ class _ColorVolumeBox {
     colors.replaceRange(_lowerIndex, _upperIndex + 1, colorSubset);
     final int median = (_population / 2).round();
     for (int i = 0, count = 0; i <= colorSubset.length; i++) {
-      count += histogram[colorSubset[i]].value;
+      count += histogram[colorSubset[i]]!.value;
       if (count >= median) {
         // We never want to split on the upperIndex, as this will result in the
         // same box.
@@ -999,7 +1071,7 @@ class _ColorVolumeBox {
     int totalPopulation = 0;
     for (int i = _lowerIndex; i <= _upperIndex; i++) {
       final Color color = colors[i];
-      final int colorPopulation = histogram[color].value;
+      final int colorPopulation = histogram[color]!.value;
       totalPopulation += colorPopulation;
       redSum += colorPopulation * color.red;
       greenSum += colorPopulation * color.green;
@@ -1027,12 +1099,12 @@ class _ColorHistogram {
       <int, Map<int, Map<int, _ColorCount>>>{};
   final DoubleLinkedQueue<Color> _keys = DoubleLinkedQueue<Color>();
 
-  _ColorCount operator [](Color color) {
-    final Map<int, Map<int, _ColorCount>> redMap = _hist[color.red];
+  _ColorCount? operator [](Color color) {
+    final Map<int, Map<int, _ColorCount>>? redMap = _hist[color.red];
     if (redMap == null) {
       return null;
     }
-    final Map<int, _ColorCount> blueMap = redMap[color.blue];
+    final Map<int, _ColorCount>? blueMap = redMap[color.blue];
     if (blueMap == null) {
       return null;
     }
@@ -1046,13 +1118,13 @@ class _ColorHistogram {
 
     bool newColor = false;
 
-    Map<int, Map<int, _ColorCount>> redMap = _hist[red];
+    Map<int, Map<int, _ColorCount>>? redMap = _hist[red];
     if (redMap == null) {
       _hist[red] = redMap = <int, Map<int, _ColorCount>>{};
       newColor = true;
     }
 
-    Map<int, _ColorCount> blueMap = redMap[blue];
+    Map<int, _ColorCount>? blueMap = redMap[blue];
     if (blueMap == null) {
       redMap[blue] = blueMap = <int, _ColorCount>{};
       newColor = true;
@@ -1068,10 +1140,10 @@ class _ColorHistogram {
     }
   }
 
-  void removeWhere(bool predicate(Color key)) {
-    for (Color key in _keys) {
+  void removeWhere(bool Function(Color key) predicate) {
+    for (final Color key in _keys) {
       if (predicate(key)) {
-        _hist[key.red][key.blue][key.green] = null;
+        _hist[key.red]?[key.blue]?.remove(key.green);
       }
     }
     _keys.removeWhere((Color color) => predicate(color));
@@ -1088,32 +1160,28 @@ class _ColorHistogram {
 
 class _ColorCutQuantizer {
   _ColorCutQuantizer(
-    this.image, {
+    this.encodedImage, {
     this.maxColors = PaletteGenerator._defaultCalculateNumberColors,
     this.region,
-    this.filters,
-  })  : assert(image != null),
-        assert(maxColors != null),
-        assert(region == null || region != Rect.zero),
-        _paletteColors = <PaletteColor>[];
+    this.filters = const <PaletteFilter>[avoidRedBlackWhitePaletteFilter],
+  }) : assert(region == null || region != Rect.zero);
 
-  FutureOr<List<PaletteColor>> get quantizedColors async {
-    if (_paletteColors.isNotEmpty) {
-      return _paletteColors;
-    } else {
-      return _quantizeColors(image);
-    }
-  }
-
-  final ui.Image image;
-  final List<PaletteColor> _paletteColors;
-
+  final EncodedImage encodedImage;
   final int maxColors;
-  final Rect region;
+  final Rect? region;
   final List<PaletteFilter> filters;
 
+  Completer<List<PaletteColor>>? _paletteColorsCompleter;
+  FutureOr<List<PaletteColor>> get quantizedColors async {
+    if (_paletteColorsCompleter == null) {
+      _paletteColorsCompleter = Completer<List<PaletteColor>>();
+      _paletteColorsCompleter!.complete(_quantizeColors());
+    }
+    return _paletteColorsCompleter!.future;
+  }
+
   Iterable<Color> _getImagePixels(ByteData pixels, int width, int height,
-      {Rect region}) sync* {
+      {Rect? region}) sync* {
     final int rowStride = width * 4;
     int rowStart;
     int rowEnd;
@@ -1150,8 +1218,8 @@ class _ColorCutQuantizer {
 
   bool _shouldIgnoreColor(Color color) {
     final HSLColor hslColor = HSLColor.fromColor(color);
-    if (filters != null && filters.isNotEmpty) {
-      for (PaletteFilter filter in filters) {
+    if (filters.isNotEmpty) {
+      for (final PaletteFilter filter in filters) {
         if (!filter(hslColor)) {
           return true;
         }
@@ -1160,7 +1228,7 @@ class _ColorCutQuantizer {
     return false;
   }
 
-  Future<List<PaletteColor>> _quantizeColors(ui.Image image) async {
+  List<PaletteColor> _quantizeColors() {
     const int quantizeWordWidth = 5;
     const int quantizeChannelWidth = 8;
     const int quantizeShift = quantizeChannelWidth - quantizeWordWidth;
@@ -1176,15 +1244,18 @@ class _ColorCutQuantizer {
       );
     }
 
-    final ByteData imageData =
-        await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    final Iterable<Color> pixels =
-        _getImagePixels(imageData, image.width, image.height, region: region);
+    final List<PaletteColor> paletteColors = <PaletteColor>[];
+    final Iterable<Color> pixels = _getImagePixels(
+      encodedImage.byteData,
+      encodedImage.width,
+      encodedImage.height,
+      region: region,
+    );
     final _ColorHistogram hist = _ColorHistogram();
-    Color currentColor;
-    _ColorCount currentColorCount;
+    Color? currentColor;
+    _ColorCount? currentColorCount;
 
-    for (Color pixel in pixels) {
+    for (final Color pixel in pixels) {
       // Update the histogram, but only for non-zero alpha values, and for the
       // ones we do add, make their alphas opaque so that we can use a Color as
       // the histogram key.
@@ -1201,7 +1272,7 @@ class _ColorCutQuantizer {
           hist[colorKey] = currentColorCount = _ColorCount();
         }
       }
-      currentColorCount.value = currentColorCount.value + 1;
+      currentColorCount!.value = currentColorCount.value + 1;
     }
     // Now let's remove any colors that the filters want to ignore.
     hist.removeWhere((Color color) {
@@ -1210,16 +1281,16 @@ class _ColorCutQuantizer {
     if (hist.length <= maxColors) {
       // The image has fewer colors than the maximum requested, so just return
       // the colors.
-      _paletteColors.clear();
-      for (Color color in hist.keys) {
-        _paletteColors.add(PaletteColor(color, hist[color].value));
+      paletteColors.clear();
+      for (final Color color in hist.keys) {
+        paletteColors.add(PaletteColor(color, hist[color]!.value));
       }
     } else {
       // We need use quantization to reduce the number of colors
-      _paletteColors.clear();
-      _paletteColors.addAll(_quantizePixels(maxColors, hist));
+      paletteColors.clear();
+      paletteColors.addAll(_quantizePixels(maxColors, hist));
     }
-    return _paletteColors;
+    return paletteColors;
   }
 
   List<PaletteColor> _quantizePixels(
@@ -1252,7 +1323,7 @@ class _ColorCutQuantizer {
   void _splitBoxes(PriorityQueue<_ColorVolumeBox> queue, final int maxSize) {
     while (queue.length < maxSize) {
       final _ColorVolumeBox colorVolumeBox = queue.removeFirst();
-      if (colorVolumeBox != null && colorVolumeBox.canSplit()) {
+      if (colorVolumeBox.canSplit()) {
         // First split the box, and offer the result
         queue.add(colorVolumeBox.splitBox());
         // Then offer the box back
@@ -1268,7 +1339,7 @@ class _ColorCutQuantizer {
   List<PaletteColor> _generateAverageColors(
       PriorityQueue<_ColorVolumeBox> colorVolumeBoxes) {
     final List<PaletteColor> colors = <PaletteColor>[];
-    for (_ColorVolumeBox colorVolumeBox in colorVolumeBoxes.toList()) {
+    for (final _ColorVolumeBox colorVolumeBox in colorVolumeBoxes.toList()) {
       final PaletteColor paletteColor = colorVolumeBox.getAverageColor();
       if (!_shouldIgnoreColor(paletteColor.color)) {
         colors.add(paletteColor);

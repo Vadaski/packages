@@ -1,9 +1,9 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
 import 'package:animations/animations.dart';
+import 'package:flutter/material.dart';
 
 const String _loremIpsumParagraph =
     'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod '
@@ -40,8 +40,11 @@ const double _fabDimension = 56.0;
 
 /// The demo page for [OpenContainerTransform].
 class OpenContainerTransformDemo extends StatefulWidget {
+  /// Creates the demo page for [OpenContainerTransform].
+  const OpenContainerTransformDemo({super.key});
+
   @override
-  _OpenContainerTransformDemoState createState() {
+  State<OpenContainerTransformDemo> createState() {
     return _OpenContainerTransformDemoState();
   }
 }
@@ -49,6 +52,14 @@ class OpenContainerTransformDemo extends StatefulWidget {
 class _OpenContainerTransformDemoState
     extends State<OpenContainerTransformDemo> {
   ContainerTransitionType _transitionType = ContainerTransitionType.fade;
+
+  void _showMarkedAsDoneSnackbar(bool? isMarkedAsDone) {
+    if (isMarkedAsDone ?? false) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Marked as done!'),
+      ));
+    }
+  }
 
   void _showSettingsBottomModalSheet(BuildContext context) {
     showModalBottomSheet<void>(
@@ -64,7 +75,7 @@ class _OpenContainerTransformDemoState
                 children: <Widget>[
                   Text(
                     'Fade mode',
-                    style: Theme.of(context).textTheme.caption,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
                   ToggleButtons(
@@ -107,7 +118,7 @@ class _OpenContainerTransformDemoState
         title: const Text('Container transform'),
         actions: <Widget>[
           IconButton(
-            icon: Icon(Icons.settings),
+            icon: const Icon(Icons.settings),
             onPressed: () {
               _showSettingsBottomModalSheet(context);
             },
@@ -122,6 +133,7 @@ class _OpenContainerTransformDemoState
             closedBuilder: (BuildContext _, VoidCallback openContainer) {
               return _ExampleCard(openContainer: openContainer);
             },
+            onClosed: _showMarkedAsDoneSnackbar,
           ),
           const SizedBox(height: 16.0),
           _OpenContainerWrapper(
@@ -129,6 +141,7 @@ class _OpenContainerTransformDemoState
             closedBuilder: (BuildContext _, VoidCallback openContainer) {
               return _ExampleSingleTile(openContainer: openContainer);
             },
+            onClosed: _showMarkedAsDoneSnackbar,
           ),
           const SizedBox(height: 16.0),
           Row(
@@ -142,6 +155,7 @@ class _OpenContainerTransformDemoState
                       subtitle: 'Secondary text',
                     );
                   },
+                  onClosed: _showMarkedAsDoneSnackbar,
                 ),
               ),
               const SizedBox(width: 8.0),
@@ -154,6 +168,7 @@ class _OpenContainerTransformDemoState
                       subtitle: 'Secondary text',
                     );
                   },
+                  onClosed: _showMarkedAsDoneSnackbar,
                 ),
               ),
             ],
@@ -170,6 +185,7 @@ class _OpenContainerTransformDemoState
                       subtitle: 'Secondary',
                     );
                   },
+                  onClosed: _showMarkedAsDoneSnackbar,
                 ),
               ),
               const SizedBox(width: 8.0),
@@ -182,6 +198,7 @@ class _OpenContainerTransformDemoState
                       subtitle: 'Secondary',
                     );
                   },
+                  onClosed: _showMarkedAsDoneSnackbar,
                 ),
               ),
               const SizedBox(width: 8.0),
@@ -194,17 +211,19 @@ class _OpenContainerTransformDemoState
                       subtitle: 'Secondary',
                     );
                   },
+                  onClosed: _showMarkedAsDoneSnackbar,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16.0),
           ...List<Widget>.generate(10, (int index) {
-            return OpenContainer(
+            return OpenContainer<bool>(
               transitionType: _transitionType,
               openBuilder: (BuildContext _, VoidCallback openContainer) {
-                return _DetailsPage();
+                return const _DetailsPage();
               },
+              onClosed: _showMarkedAsDoneSnackbar,
               tappable: false,
               closedShape: const RoundedRectangleBorder(),
               closedElevation: 0.0,
@@ -226,7 +245,9 @@ class _OpenContainerTransformDemoState
       floatingActionButton: OpenContainer(
         transitionType: _transitionType,
         openBuilder: (BuildContext context, VoidCallback _) {
-          return _DetailsPage();
+          return const _DetailsPage(
+            includeMarkAsDoneButton: false,
+          );
         },
         closedElevation: 6.0,
         closedShape: const RoundedRectangleBorder(
@@ -254,20 +275,23 @@ class _OpenContainerTransformDemoState
 
 class _OpenContainerWrapper extends StatelessWidget {
   const _OpenContainerWrapper({
-    this.closedBuilder,
-    this.transitionType,
+    required this.closedBuilder,
+    required this.transitionType,
+    required this.onClosed,
   });
 
-  final OpenContainerBuilder closedBuilder;
+  final CloseContainerBuilder closedBuilder;
   final ContainerTransitionType transitionType;
+  final ClosedCallback<bool?> onClosed;
 
   @override
   Widget build(BuildContext context) {
-    return OpenContainer(
+    return OpenContainer<bool>(
       transitionType: transitionType,
       openBuilder: (BuildContext context, VoidCallback _) {
-        return _DetailsPage();
+        return const _DetailsPage();
       },
+      onClosed: onClosed,
       tappable: false,
       closedBuilder: closedBuilder,
     );
@@ -275,7 +299,7 @@ class _OpenContainerWrapper extends StatelessWidget {
 }
 
 class _ExampleCard extends StatelessWidget {
-  const _ExampleCard({this.openContainer});
+  const _ExampleCard({required this.openContainer});
 
   final VoidCallback openContainer;
 
@@ -288,7 +312,7 @@ class _ExampleCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Expanded(
-            child: Container(
+            child: ColoredBox(
               color: Colors.black38,
               child: Center(
                 child: Image.asset(
@@ -313,10 +337,7 @@ class _ExampleCard extends StatelessWidget {
               'adipiscing elit, sed do eiusmod tempor.',
               style: Theme.of(context)
                   .textTheme
-                  // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-                  // Material text style nomenclature.
-                  // ignore: deprecated_member_use
-                  .body1
+                  .bodyMedium!
                   .copyWith(color: Colors.black54),
             ),
           ),
@@ -328,8 +349,8 @@ class _ExampleCard extends StatelessWidget {
 
 class _SmallerCard extends StatelessWidget {
   const _SmallerCard({
-    this.openContainer,
-    this.subtitle,
+    required this.openContainer,
+    required this.subtitle,
   });
 
   final VoidCallback openContainer;
@@ -362,15 +383,12 @@ class _SmallerCard extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     'Title',
-                    // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-                    // Material text style nomenclature.
-                    // ignore: deprecated_member_use
-                    style: Theme.of(context).textTheme.title,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: Theme.of(context).textTheme.caption,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -383,7 +401,7 @@ class _SmallerCard extends StatelessWidget {
 }
 
 class _ExampleSingleTile extends StatelessWidget {
-  const _ExampleSingleTile({this.openContainer});
+  const _ExampleSingleTile({required this.openContainer});
 
   final VoidCallback openContainer;
 
@@ -415,16 +433,13 @@ class _ExampleSingleTile extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     'Title',
-                    // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-                    // Material text style nomenclature.
-                    // ignore: deprecated_member_use
-                    style: Theme.of(context).textTheme.subhead,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
                   Text(
                       'Lorem ipsum dolor sit amet, consectetur '
                       'adipiscing elit,',
-                      style: Theme.of(context).textTheme.caption),
+                      style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
             ),
@@ -438,21 +453,18 @@ class _ExampleSingleTile extends StatelessWidget {
 class _InkWellOverlay extends StatelessWidget {
   const _InkWellOverlay({
     this.openContainer,
-    this.width,
     this.height,
     this.child,
   });
 
-  final VoidCallback openContainer;
-  final double width;
-  final double height;
-  final Widget child;
+  final VoidCallback? openContainer;
+  final double? height;
+  final Widget? child;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: height,
-      width: width,
       child: InkWell(
         onTap: openContainer,
         child: child,
@@ -462,10 +474,24 @@ class _InkWellOverlay extends StatelessWidget {
 }
 
 class _DetailsPage extends StatelessWidget {
+  const _DetailsPage({this.includeMarkAsDoneButton = true});
+
+  final bool includeMarkAsDoneButton;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Details page')),
+      appBar: AppBar(
+        title: const Text('Details page'),
+        actions: <Widget>[
+          if (includeMarkAsDoneButton)
+            IconButton(
+              icon: const Icon(Icons.done),
+              onPressed: () => Navigator.pop(context, true),
+              tooltip: 'Mark as done',
+            )
+        ],
+      ),
       body: ListView(
         children: <Widget>[
           Container(
@@ -485,10 +511,7 @@ class _DetailsPage extends StatelessWidget {
               children: <Widget>[
                 Text(
                   'Title',
-                  // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-                  // Material text style nomenclature.
-                  // ignore: deprecated_member_use
-                  style: Theme.of(context).textTheme.headline.copyWith(
+                  style: Theme.of(context).textTheme.headlineSmall!.copyWith(
                         color: Colors.black54,
                         fontSize: 30.0,
                       ),
@@ -496,10 +519,7 @@ class _DetailsPage extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   _loremIpsumParagraph,
-                  // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-                  // Material text style nomenclature.
-                  // ignore: deprecated_member_use
-                  style: Theme.of(context).textTheme.body1.copyWith(
+                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                         color: Colors.black54,
                         height: 1.5,
                         fontSize: 16.0,

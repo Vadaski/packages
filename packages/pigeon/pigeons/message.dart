@@ -1,38 +1,98 @@
-// Copyright 2020 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:pigeon/pigeon_lib.dart';
+// This file is an example pigeon file that is used in compilation, unit, mock
+// handler, and e2e tests.
 
-class SearchRequest {
-  String query;
+import 'package:pigeon/pigeon.dart';
+
+@ConfigurePigeon(PigeonOptions(
+  javaOptions: JavaOptions(
+    className: 'MessagePigeon',
+    package: 'dev.flutter.aaclarke.pigeon',
+  ),
+  objcOptions: ObjcOptions(
+    prefix: 'AC',
+  ),
+))
+
+/// This comment is to test enum documentation comments.
+///
+/// This comment also tests multiple line comments.
+///
+///////////////////////////
+/// This comment also tests comments that start with '/'
+///////////////////////////
+enum MessageRequestState {
+  pending,
+  success,
+  failure,
 }
 
-class SearchReply {
-  String result;
-  String error;
+/// This comment is to test class documentation comments.
+///
+/// This comment also tests multiple line comments.
+class MessageSearchRequest {
+  /// This comment is to test field documentation comments.
+  String? query;
+
+  /// This comment is to test field documentation comments.
+  int? anInt;
+
+  /// This comment is to test field documentation comments.
+  bool? aBool;
 }
 
-@HostApi()
-abstract class Api {
-  SearchReply search(SearchRequest request);
+/// This comment is to test class documentation comments.
+class MessageSearchReply {
+  /// This comment is to test field documentation comments.
+  ///
+  /// This comment also tests multiple line comments.
+  String? result;
+
+  /// This comment is to test field documentation comments.
+  String? error;
+
+  /// This comment is to test field documentation comments.
+  MessageRequestState? state;
 }
 
-class Nested {
-  SearchRequest request;
+@HostApi(dartHostTestHandler: 'TestHostApi')
+
+/// This comment is to test api documentation comments.
+///
+/// This comment also tests multiple line comments.
+abstract class MessageApi {
+  /// This comment is to test documentation comments.
+  ///
+  /// This comment also tests multiple line comments.
+  void initialize();
+
+  /// This comment is to test method documentation comments.
+  MessageSearchReply search(MessageSearchRequest request);
 }
 
-@HostApi()
-abstract class NestedApi {
-  SearchReply search(Nested nested);
+/// This comment is to test class documentation comments.
+class MessageNested {
+  /// This comment is to test field documentation comments.
+  MessageSearchRequest? request;
 }
 
-void setupPigeon(PigeonOptions options) {
-  options.objcOptions.prefix = 'AC';
-  options.javaOptions.package = 'dev.flutter.aaclarke.pigeon';
+@HostApi(dartHostTestHandler: 'TestNestedApi')
+
+/// This comment is to test api documentation comments.
+abstract class MessageNestedApi {
+  /// This comment is to test method documentation comments.
+  ///
+  /// This comment also tests multiple line comments.
+  MessageSearchReply search(MessageNested nested);
 }
 
 @FlutterApi()
-abstract class FlutterSearchApi {
-  SearchReply search(SearchRequest request);
+
+/// This comment is to test api documentation comments.
+abstract class MessageFlutterSearchApi {
+  /// This comment is to test method documentation comments.
+  MessageSearchReply search(MessageSearchRequest request);
 }

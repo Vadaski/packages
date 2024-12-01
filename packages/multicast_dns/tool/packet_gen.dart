@@ -1,6 +1,8 @@
-// Copyright (c) 2015, the Dartino project authors. Please see the AUTHORS file
-// for details. All rights reserved. Use of this source code is governed by a
-// BSD-style license that can be found in the LICENSE file.
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// ignore_for_file: avoid_print
 
 // Support code to generate the hex-lists in test/decode_test.dart from
 // a hex-stream.
@@ -51,7 +53,7 @@ void hexDumpList(List<int> package) {
 }
 
 void dumpDatagram(Datagram datagram) {
-  String _toHex(List<int> ints) {
+  String toHex(List<int> ints) {
     final StringBuffer buffer = StringBuffer();
     for (int i = 0; i < ints.length; i++) {
       buffer.write(ints[i].toRadixString(16).padLeft(2, '0'));
@@ -65,6 +67,6 @@ void dumpDatagram(Datagram datagram) {
   }
 
   print('${datagram.address.address}:${datagram.port}:');
-  print(_toHex(datagram.data));
+  print(toHex(datagram.data));
   print('');
 }

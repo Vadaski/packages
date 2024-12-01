@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright 2013 The Flutter Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
 
 # This file is used by
 # https://github.com/flutter/tests/tree/master/registry/flutter_packages.test
@@ -12,6 +15,32 @@
 
 set -e
 
-cd packages/animations
-flutter analyze
+# ANIMATIONS PACKAGE
+
+pushd packages/animations
+flutter analyze --no-fatal-infos
 flutter test
+popd
+
+
+# RFW PACKAGE
+
+pushd packages/rfw
+
+# Update the subpackages so that the analysis doesn't get confused.
+pushd example/remote; flutter packages get; popd
+pushd example/wasm; flutter packages get; popd
+pushd test_coverage; dart pub get; popd
+
+flutter analyze --no-fatal-infos
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    # We only run the full tests on Linux because golden files differ
+    # from platform to platform.
+    flutter test
+fi
+# The next script verifies that the coverage is not regressed; it does
+# not verify goldens. (It does run all the tests though, so it still
+# catches logic issues on other platforms, just not issue that only
+# affect golden files.)
+./run_tests.sh
+popd

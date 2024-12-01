@@ -1,14 +1,17 @@
-// Copyright 2019 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
 import 'package:animations/animations.dart';
+import 'package:flutter/material.dart';
 
 /// The demo page for [FadeThroughTransition].
 class FadeThroughTransitionDemo extends StatefulWidget {
+  /// Creates the demo page for [FadeThroughTransition].
+  const FadeThroughTransitionDemo({super.key});
+
   @override
-  _FadeThroughTransitionDemoState createState() =>
+  State<FadeThroughTransitionDemo> createState() =>
       _FadeThroughTransitionDemoState();
 }
 
@@ -46,18 +49,18 @@ class _FadeThroughTransitionDemoState extends State<FadeThroughTransitionDemo> {
             pageIndex = newValue;
           });
         },
-        items: <BottomNavigationBarItem>[
+        items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.photo_library),
-            title: const Text('Albums'),
+            label: 'Albums',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.photo),
-            title: const Text('Photos'),
+            label: 'Photos',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.search),
-            title: const Text('Search'),
+            label: 'Search',
           ),
         ],
       ),
@@ -76,7 +79,7 @@ class _ExampleCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 Expanded(
-                  child: Container(
+                  child: ColoredBox(
                     color: Colors.black26,
                     child: Padding(
                       padding: const EdgeInsets.all(30.0),
@@ -93,14 +96,11 @@ class _ExampleCard extends StatelessWidget {
                     children: <Widget>[
                       Text(
                         '123 photos',
-                        // TODO(shihaohong): Remove this once Flutter stable adopts the modern
-                        // Material text style nomenclature.
-                        // ignore: deprecated_member_use
-                        style: Theme.of(context).textTheme.body2,
+                        style: Theme.of(context).textTheme.bodyLarge,
                       ),
                       Text(
                         '123 photos',
-                        style: Theme.of(context).textTheme.caption,
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),

@@ -1,14 +1,14 @@
-// Copyright (c) 2015, the Dartino project authors. Please see the AUTHORS file
-// for details. All rights reserved. Use of this source code is governed by a
-// BSD-style license that can be found in the LICENSE file.
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:multicast_dns/src/resource_record.dart';
+import 'resource_record.dart';
 
 /// Class for maintaining state about pending mDNS requests.
-class PendingRequest extends LinkedListEntry<PendingRequest> {
+base class PendingRequest extends LinkedListEntry<PendingRequest> {
   /// Creates a new PendingRequest.
   PendingRequest(this.type, this.domainName, this.controller);
 
@@ -25,7 +25,7 @@ class PendingRequest extends LinkedListEntry<PendingRequest> {
   final StreamController<ResourceRecord> controller;
 
   /// The timer for the request.
-  Timer timer;
+  Timer? timer;
 }
 
 /// Class for keeping track of pending lookups and processing incoming
@@ -51,7 +51,7 @@ class LookupResolver {
   /// Parses [ResoureRecord]s received and delivers them to the appropriate
   /// listener(s) added via [addPendingRequest].
   void handleResponse(List<ResourceRecord> response) {
-    for (ResourceRecord r in response) {
+    for (final ResourceRecord r in response) {
       final int type = r.resourceRecordType;
       String name = r.name.toLowerCase();
       if (name.endsWith('.')) {
@@ -73,7 +73,7 @@ class LookupResolver {
         return requestName == name && request.type == type;
       }
 
-      for (PendingRequest pendingRequest in _pendingRequests) {
+      for (final PendingRequest pendingRequest in _pendingRequests) {
         if (responseMatches(pendingRequest)) {
           if (pendingRequest.controller.isClosed) {
             return;
@@ -89,7 +89,7 @@ class LookupResolver {
     while (_pendingRequests.isNotEmpty) {
       final PendingRequest request = _pendingRequests.first;
       request.unlink();
-      request.timer.cancel();
+      request.timer?.cancel();
       request.controller.close();
     }
   }

@@ -1,12 +1,12 @@
-// Copyright (c) 2015, the Dartino project authors. Please see the AUTHORS file
-// for details. All rights reserved. Use of this source code is governed by a
-// BSD-style license that can be found in the LICENSE file.
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 import 'dart:io';
 
-import 'package:test/test.dart';
 import 'package:multicast_dns/src/lookup_resolver.dart';
 import 'package:multicast_dns/src/resource_record.dart';
+import 'package:test/test.dart';
 
 void main() {
   testTimeout();
@@ -40,7 +40,8 @@ void testResult() {
     final ResourceRecord response =
         ip4Result('xxx.local', InternetAddress('1.2.3.4'));
     resolver.handleResponse(<ResourceRecord>[response]);
-    final IPAddressResourceRecord result = await futureResult.first;
+    final IPAddressResourceRecord result =
+        await futureResult.first as IPAddressResourceRecord;
     expect('1.2.3.4', result.address.address);
     resolver.clearPendingRequests();
   });
@@ -59,8 +60,10 @@ void testResult2() {
     final ResourceRecord response2 =
         ip4Result('yyy.local', InternetAddress('2.3.4.5'));
     resolver.handleResponse(<ResourceRecord>[response2, response1]);
-    final IPAddressResourceRecord result1 = await futureResult1.first;
-    final IPAddressResourceRecord result2 = await futureResult2.first;
+    final IPAddressResourceRecord result1 =
+        await futureResult1.first as IPAddressResourceRecord;
+    final IPAddressResourceRecord result2 =
+        await futureResult2.first as IPAddressResourceRecord;
     expect('1.2.3.4', result1.address.address);
     expect('2.3.4.5', result2.address.address);
     resolver.clearPendingRequests();
@@ -88,8 +91,10 @@ void testResult3() {
     resolver.handleResponse(<ResourceRecord>[response0]);
     resolver.handleResponse(<ResourceRecord>[response2, response1]);
     resolver.handleResponse(<ResourceRecord>[response0]);
-    final IPAddressResourceRecord result1 = await futureResult1.first;
-    final IPAddressResourceRecord result2 = await futureResult2.first;
+    final IPAddressResourceRecord result1 =
+        await futureResult1.first as IPAddressResourceRecord;
+    final IPAddressResourceRecord result2 =
+        await futureResult2.first as IPAddressResourceRecord;
     expect('1.2.3.4', result1.address.address);
     expect('2.3.4.5', result2.address.address);
     resolver.clearPendingRequests();

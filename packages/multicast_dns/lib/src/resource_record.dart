@@ -1,4 +1,4 @@
-// Copyright 2018 The Flutter Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,32 +7,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
-import 'package:multicast_dns/src/constants.dart';
-import 'package:multicast_dns/src/packet.dart';
-
-// TODO(dnfield): Probably should go with a real hashing function here
-// when https://github.com/dart-lang/sdk/issues/11617 is figured out.
-const int _seedHashPrime = 2166136261;
-const int _multipleHashPrime = 16777619;
-
-int _combineHash(int current, int hash) =>
-    (current & _multipleHashPrime) ^ hash;
-
-int _hashValues(List<int> values) {
-  assert(values != null);
-  assert(values.isNotEmpty);
-
-  return values.fold(
-    _seedHashPrime,
-    (int current, int next) => _combineHash(current, next),
-  );
-}
+import 'constants.dart';
+import 'packet.dart';
 
 /// Enumeration of support resource record types.
-class ResourceRecordType {
+abstract class ResourceRecordType {
   // This class is intended to be used as a namespace, and should not be
   // extended directly.
-  factory ResourceRecordType._() => null;
+  ResourceRecordType._();
 
   /// An IPv4 Address record, also known as an "A" record. It has a value of 1.
   static const int addressIPv4 = 1;
@@ -86,6 +68,7 @@ class ResourceRecordType {
 }
 
 /// Represents a DNS query.
+@immutable
 class ResourceRecordQuery {
   /// Creates a new ResourceRecordQuery.
   ///
@@ -94,8 +77,7 @@ class ResourceRecordQuery {
     this.resourceRecordType,
     this.fullyQualifiedName,
     this.questionType,
-  )   : assert(fullyQualifiedName != null),
-        assert(ResourceRecordType.debugAssertValid(resourceRecordType));
+  ) : assert(ResourceRecordType.debugAssertValid(resourceRecordType));
 
   /// An A (IPv4) query.
   ResourceRecordQuery.addressIPv4(
@@ -172,8 +154,8 @@ class ResourceRecordQuery {
   }
 
   @override
-  int get hashCode => _hashValues(
-      <int>[resourceRecordType, fullyQualifiedName.hashCode, questionType]);
+  int get hashCode =>
+      Object.hash(resourceRecordType, fullyQualifiedName, questionType);
 
   @override
   bool operator ==(Object other) {
@@ -185,14 +167,14 @@ class ResourceRecordQuery {
 
   @override
   String toString() =>
-      '$runtimeType{$fullyQualifiedName, type: ${ResourceRecordType.toDebugString(resourceRecordType)}, isMulticast: $isMulticast}';
+      'ResourceRecordQuery{$fullyQualifiedName, type: ${ResourceRecordType.toDebugString(resourceRecordType)}, isMulticast: $isMulticast}';
 }
 
 /// Base implementation of DNS resource records (RRs).
+@immutable
 abstract class ResourceRecord {
   /// Creates a new ResourceRecord.
-  const ResourceRecord(this.resourceRecordType, this.name, this.validUntil)
-      : assert(name != null);
+  const ResourceRecord(this.resourceRecordType, this.name, this.validUntil);
 
   /// The FQDN for this record.
   final String name;
@@ -207,34 +189,18 @@ abstract class ResourceRecord {
 
   @override
   String toString() =>
-      '$runtimeType{$name, validUntil: ${DateTime.fromMillisecondsSinceEpoch(validUntil ?? 0)}, $_additionalInfo}';
+      '$runtimeType{$name, validUntil: ${DateTime.fromMillisecondsSinceEpoch(validUntil)}, $_additionalInfo}';
+
+  @override
+  int get hashCode => Object.hash(name, validUntil, resourceRecordType);
 
   @override
   bool operator ==(Object other) {
-    return other.runtimeType == runtimeType && _equals(other);
-  }
-
-  @protected
-  bool _equals(ResourceRecord other) {
-    return other.name == name &&
+    return other is ResourceRecord &&
+        other.name == name &&
         other.validUntil == validUntil &&
         other.resourceRecordType == resourceRecordType;
   }
-
-  @override
-  int get hashCode {
-    return _hashValues(<int>[
-      name.hashCode,
-      validUntil.hashCode,
-      resourceRecordType.hashCode,
-      _hashCode,
-    ]);
-  }
-
-  // Subclasses of this class should use _hashValues to create a hash code
-  // that will then get hashed in with the common values on this class.
-  @protected
-  int get _hashCode;
 
   /// Low level method for encoding this record into an mDNS packet.
   ///
@@ -247,12 +213,11 @@ abstract class ResourceRecord {
 /// A Service Pointer for reverse mapping an IP address (DNS "PTR").
 class PtrResourceRecord extends ResourceRecord {
   /// Creates a new PtrResourceRecord.
-  PtrResourceRecord(
+  const PtrResourceRecord(
     String name,
     int validUntil, {
-    @required this.domainName,
-  })  : assert(domainName != null),
-        super(ResourceRecordType.serverPointer, name, validUntil);
+    required this.domainName,
+  }) : super(ResourceRecordType.serverPointer, name, validUntil);
 
   /// The FQDN for this record.
   final String domainName;
@@ -261,14 +226,14 @@ class PtrResourceRecord extends ResourceRecord {
   String get _additionalInfo => 'domainName: $domainName';
 
   @override
-  bool _equals(ResourceRecord other) {
-    return other is PtrResourceRecord &&
-        other.domainName == domainName &&
-        super._equals(other);
-  }
+  int get hashCode => Object.hash(domainName.hashCode, super.hashCode);
 
   @override
-  int get _hashCode => _combineHash(_seedHashPrime, domainName.hashCode);
+  bool operator ==(Object other) {
+    return super == other &&
+        other is PtrResourceRecord &&
+        other.domainName == domainName;
+  }
 
   @override
   Uint8List encodeResponseRecord() {
@@ -282,7 +247,7 @@ class IPAddressResourceRecord extends ResourceRecord {
   IPAddressResourceRecord(
     String name,
     int validUntil, {
-    @required this.address,
+    required this.address,
   }) : super(
             address.type == InternetAddressType.IPv4
                 ? ResourceRecordType.addressIPv4
@@ -297,12 +262,14 @@ class IPAddressResourceRecord extends ResourceRecord {
   String get _additionalInfo => 'address: $address';
 
   @override
-  bool _equals(ResourceRecord other) {
-    return other is IPAddressResourceRecord && other.address == address;
-  }
+  int get hashCode => Object.hash(address.hashCode, super.hashCode);
 
   @override
-  int get _hashCode => _combineHash(_seedHashPrime, address.hashCode);
+  bool operator ==(Object other) {
+    return super == other &&
+        other is IPAddressResourceRecord &&
+        other.address == address;
+  }
 
   @override
   Uint8List encodeResponseRecord() {
@@ -313,18 +280,14 @@ class IPAddressResourceRecord extends ResourceRecord {
 /// A Service record, capturing a host target and port (DNS "SRV").
 class SrvResourceRecord extends ResourceRecord {
   /// Creates a new service record.
-  SrvResourceRecord(
+  const SrvResourceRecord(
     String name,
     int validUntil, {
-    @required this.target,
-    @required this.port,
-    @required this.priority,
-    @required this.weight,
-  })  : assert(target != null),
-        assert(port != null),
-        assert(priority != null),
-        assert(weight != null),
-        super(ResourceRecordType.service, name, validUntil);
+    required this.target,
+    required this.port,
+    required this.priority,
+    required this.weight,
+  }) : super(ResourceRecordType.service, name, validUntil);
 
   /// The hostname for this record.
   final String target;
@@ -343,21 +306,18 @@ class SrvResourceRecord extends ResourceRecord {
       'target: $target, port: $port, priority: $priority, weight: $weight';
 
   @override
-  bool _equals(ResourceRecord other) {
-    return other is SrvResourceRecord &&
+  int get hashCode =>
+      Object.hash(target, port, priority, weight, super.hashCode);
+
+  @override
+  bool operator ==(Object other) {
+    return super == other &&
+        other is SrvResourceRecord &&
         other.target == target &&
         other.port == port &&
         other.priority == priority &&
         other.weight == weight;
   }
-
-  @override
-  int get _hashCode => _hashValues(<int>[
-        target.hashCode,
-        port.hashCode,
-        priority.hashCode,
-        weight.hashCode,
-      ]);
 
   @override
   Uint8List encodeResponseRecord() {
@@ -375,12 +335,11 @@ class SrvResourceRecord extends ResourceRecord {
 /// A Text record, contianing additional textual data (DNS "TXT").
 class TxtResourceRecord extends ResourceRecord {
   /// Creates a new text record.
-  TxtResourceRecord(
+  const TxtResourceRecord(
     String name,
     int validUntil, {
-    @required this.text,
-  })  : assert(text != null),
-        super(ResourceRecordType.text, name, validUntil);
+    required this.text,
+  }) : super(ResourceRecordType.text, name, validUntil);
 
   /// The raw text from this record.
   final String text;
@@ -389,12 +348,11 @@ class TxtResourceRecord extends ResourceRecord {
   String get _additionalInfo => 'text: $text';
 
   @override
-  bool _equals(ResourceRecord other) {
-    return other is TxtResourceRecord && other.text == text;
-  }
+  int get hashCode => Object.hash(text.hashCode, super.hashCode);
 
   @override
-  int get _hashCode => _combineHash(_seedHashPrime, text.hashCode);
+  bool operator ==(Object other) =>
+      super == other && other is TxtResourceRecord && other.text == text;
 
   @override
   Uint8List encodeResponseRecord() {
